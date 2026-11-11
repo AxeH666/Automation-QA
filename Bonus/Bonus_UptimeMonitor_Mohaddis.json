@@ -1,0 +1,224 @@
+{
+  "name": "Bonus | RealWorld Demo Uptime Monitor",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        200
+      ],
+      "id": "5851c03e-00cd-4c32-9faa-c71de4105d92",
+      "name": "Every 5 minutes"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "return [{json:{startedMs: Date.now()}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        200
+      ],
+      "id": "671204b8-4dbb-41aa-b678-22fe497b472e",
+      "name": "Start timer"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://vue-vuex-realworld.netlify.app/",
+        "options": {
+          "timeout": 12000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "text",
+              "neverError": true
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        200
+      ],
+      "id": "b4b5331b-0cd8-4088-94b4-145fcc3bd824",
+      "name": "Ping app",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1500,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const entry = $input.first()?.json || {};\nconst started = $('Start timer').first().json.startedMs;\nconst elapsedMs = Math.max(0, Date.now() - started);\nconst code = typeof entry.statusCode === 'number' ? entry.statusCode : null;\nconst healthy = code === 200 && !entry.error;\nconst detail = entry.error ? String(entry.error.message || JSON.stringify(entry.error)) : (code === null ? 'No HTTP status recorded' : 'HTTP '+code);\nconst text = `🚨 UPTIME ALERT: vue-vuex-realworld.netlify.app\\n${detail}\\nResponse time (incl. retries): ${elapsedMs}ms\\nChecked: ${new Date().toISOString()}\\nTarget: https://vue-vuex-realworld.netlify.app/`;\nconsole.log(JSON.stringify({check:'vue-vuex-realworld.netlify.app',code,elapsedMs,healthy,detail}));\nreturn [{json:{healthy,statusCode:code,responseTimeMs:elapsedMs,detail,message:text}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        200
+      ],
+      "id": "2b8a2ece-d7e3-4d68-bc09-304911173d88",
+      "name": "Evaluate status and elapsed"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "d66dbac0-aaa2-4803-8c99-ea89262b6a9c",
+              "leftValue": "={{ !$json.healthy }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        920,
+        200
+      ],
+      "id": "e4d65ae6-7a4e-42f1-a7c7-4e837ac33f90",
+      "name": "Not HTTP 200?"
+    },
+    {
+      "parameters": {
+        "authentication": "webhook",
+        "content": "={{ $json.message }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.discord",
+      "typeVersion": 2,
+      "position": [
+        1160,
+        90
+      ],
+      "id": "4b932c96-70bc-4507-97c3-21be91793fbf",
+      "name": "Discord: uptime alert",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1500,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "for (const x of $input.all()) console.error('Uptime notification delivery failure', JSON.stringify(x.json)); return $input.all();"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1400,
+        90
+      ],
+      "id": "a28ad51a-1598-4ba7-9a21-f85be55d693e",
+      "name": "Log alert delivery failure"
+    }
+  ],
+  "connections": {
+    "Every 5 minutes": {
+      "main": [
+        [
+          {
+            "node": "Start timer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Start timer": {
+      "main": [
+        [
+          {
+            "node": "Ping app",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ping app": {
+      "main": [
+        [
+          {
+            "node": "Evaluate status and elapsed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evaluate status and elapsed": {
+      "main": [
+        [
+          {
+            "node": "Not HTTP 200?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Not HTTP 200?": {
+      "main": [
+        [
+          {
+            "node": "Discord: uptime alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Discord: uptime alert": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Log alert delivery failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log alert delivery failure": {
+      "main": []
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false,
+  "pinData": {},
+  "tags": []
+}
